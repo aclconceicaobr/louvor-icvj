@@ -1,0 +1,17 @@
+{
+  "name": "Louvor ICVJ · Ministério de Louvor",
+  "short_name": "Louvor ICVJ",
+  "description": "Escalas, cifras e avisos do Ministério de Louvor da ICVJ.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#006C00",
+  "theme_color": "#006C00",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

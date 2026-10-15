@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Louvor ICVJ</title>
+<meta name="description" content="Escalas, cifras e avisos do Ministério de Louvor da ICVJ.">
+<meta name="theme-color" content="#006C00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Louvor ICVJ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!--APP-->
+<div id="splash"><img id="splash-logo" alt=""><b>Louvor ICVJ</b><span>Ministério de Louvor</span></div>
+<div id="app"><main id="view"></main><nav id="tabs" aria-label="Navegação principal"></nav></div>
+<div id="sheet-root"></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<!--/APP-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
