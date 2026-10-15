@@ -18,7 +18,7 @@
   const LOGO = 'icons/logo.png';
   const CFG = window.LOUVOR_CONFIG;
   const sb = window.supabase.createClient(CFG.url, CFG.key);
-  const CACHE = 'louvor-icvj-cache-v2';
+  const CACHE = 'louvor-icvj-cache-v3';
 
   /* ---------------- Estado (espelho do banco) ---------------- */
   let S = null;        // { meId, leader, people, songs, events, unavail, mural }
@@ -26,7 +26,8 @@
   let booting = true;
 
   function buildState(rows) {
-    const [members, songs, events, asg, unav, notices] = rows;
+    const [members, songs, events, asg, unav, notices, reps] = rows;
+    const prefOf = (sid) => Object.fromEntries(reps.filter((r) => r.song_id === sid).map((r) => [r.member_id, r.key]));
     const evs = events.map((e) => {
       const team = {};
       ROLES.forEach((r) => { team[r.key] = { pid: null, status: 'pendente' }; });
@@ -38,7 +39,8 @@
       meId: session.user.id,
       leader: !!(meRow && meRow.is_leader),
       people: members.map((m) => ({ id: m.id, name: m.name, ini: m.ini, skills: m.skills || [], fem: m.fem, leader: m.is_leader })),
-      songs: songs.map((s) => ({ id: s.id, title: s.title, cat: s.cat, bpm: s.bpm, key: s.key, sig: s.sig, chart: s.chart, pref: s.pref || {} })),
+      songs: songs.map((s) => ({ id: s.id, title: s.title, cat: s.cat, bpm: s.bpm, key: s.key, sig: s.sig, chart: s.chart, pref: prefOf(s.id) })),
+      rep: reps.map((r) => ({ pid: r.member_id, songId: r.song_id, key: r.key, at: r.created_at })),
       events: evs,
       unavail: unav.map((u) => ({ id: u.id, pid: u.member_id, from: u.from_date, to: u.to_date, reason: u.reason, auto: u.event_id })),
       mural: notices.map((n) => ({ id: n.id, text: n.text, author: n.author_name || 'Líder do louvor', at: Date.parse(n.created_at) })),
@@ -54,6 +56,7 @@
       q(sb.from('assignments').select('*')),
       q(sb.from('unavailability').select('*').gte('to_date', since)),
       q(sb.from('notices').select('*').order('created_at', { ascending: false }).limit(60)),
+      q(sb.from('repertoire').select('*')),
     ]);
     S = buildState(rows);
     try { localStorage.setItem(CACHE, JSON.stringify({ uid: session.user.id, S })); } catch (e) { /* sem cache */ }
@@ -84,6 +87,11 @@
   const song = (id) => S.songs.find((s) => s.id === id);
   const event = (id) => S.events.find((e) => e.id === id);
   const me = () => person(S.meId);
+  // Repertório: músicas que cada ministro canta, com o tom dele
+  const repOf = (pid) => (S.rep || []).filter((r) => r.pid === pid && song(r.songId));
+  const ministers = () => S.people.filter((p) => p.skills.includes('ministro') || repOf(p.id).length);
+  const sings = (p) => p.skills.some((x) => x === 'vocal' || x === 'ministro');
+  const canEditRep = (pid) => pid === S.meId || S.leader;
   const first = (p) => (p ? p.name.split(' ')[0] : '—');
   const initials = (p) => p.ini || p.name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const roleLabel = (r, p) => (r.key === 'ministro' && p ? (p.fem ? 'Ministra' : 'Ministro') : r.label);
@@ -439,10 +447,32 @@
     return `
       <header class="top big"><div class="grow"><h1>Músicas</h1><div class="sub">${S.songs.length} no repertório da igreja</div></div>
         <button class="iconbtn fill" data-act="newSong" aria-label="Nova música">${ic('plus')}</button></header>
+      ${minStrip()}
       <label class="search">${ic('search', 'sm')}<input id="song-q" type="search" placeholder="Buscar por título, tom ou trecho" value="${esc(songQuery)}" autocomplete="off"></label>
       <div class="chips" role="tablist">${cats.map((c) => `<button class="chip ${c === songCat ? 'on' : ''}" data-act="cat" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <div class="rows-sep" id="song-list">${rows || '<div class="card empty-state">Nenhuma música encontrada.</div>'}</div>`;
   };
+
+  const minStrip = () => {
+    const ms = ministers();
+    if (!ms.length) return '';
+    return `<section class="sec"><div class="sec-h"><h2>Repertório por ministro</h2></div>
+      <div class="min-strip">${ms.map((p) => { const n = repOf(p.id).length; return `<button class="min-card" data-go="#/repertorio/${p.id}">${avatar(p)}<b>${esc(first(p))}${p.id === S.meId ? ' (você)' : ''}</b><span>${n} música${n === 1 ? '' : 's'}</span></button>`; }).join('')}</div></section>`;
+  };
+
+  views.repertorio = (pid) => {
+    const p = person(pid);
+    if (!p) return notFound();
+    const list = repOf(pid).sort((a, b) => song(a.songId).title.localeCompare(song(b.songId).title, 'pt'));
+    const edit = canEditRep(pid);
+    const rows = list.map((r) => { const s = song(r.songId); return `<div class="row"><button class="row-main" data-go="#/cifra/${s.id}/${enc(r.key)}"><span class="song-ic">${ic('music', 'sm')}</span><div class="grow"><div class="t">${esc(s.title)}</div><div class="s">${esc(s.cat)} • ${s.bpm} BPM${r.key !== s.key ? ' • original em ' + esc(s.key) : ''}</div></div><span class="tom"><span>TOM</span><b>${esc(r.key)}</b></span></button>${edit ? `<button class="iconbtn" data-act="repEdit" data-pid="${pid}" data-song="${s.id}" aria-label="Mudar tom ou tirar">${ic('more', 'sm')}</button>` : ''}</div>`; }).join('');
+    const title = pid === S.meId ? 'Meu repertório' : 'Repertório de ' + first(p);
+    return `
+      <header class="top">${back('#/musicas')}<div class="grow"><h1>${esc(title)}</h1><div class="sub">${esc(p.name)} • ${list.length} música${list.length === 1 ? '' : 's'}</div></div></header>
+      ${edit || list.length ? `<div class="btn-row">${edit ? `<button class="btn primary" data-act="repAdd" data-pid="${pid}">${ic('plus', 'sm')} Adicionar música</button>` : ''}${list.length ? `<a class="btn whats" href="https://wa.me/?text=${encodeURIComponent(repText(p, list))}" target="_blank" rel="noopener">${ic('chat', 'sm')} Enviar</a>` : ''}</div>` : ''}
+      <div class="rows-sep">${rows || `<div class="card empty-state">${edit ? 'Nenhuma música ainda. Toque em Adicionar música, ou abra uma cifra e salve o seu tom.' : esc(first(p)) + ' ainda não montou o repertório.'}</div>`}</div>`;
+  };
+  const repText = (p, list) => `*Repertório de ${p.name}*\n\n` + list.map((r) => `• ${song(r.songId).title} (${r.key})`).join('\n');
 
   views.cifra = (id, key, evId) => {
     const s = song(id);
@@ -460,7 +490,7 @@
       <div class="card keybar"><div class="line"><div><div class="lbl">Tom</div><div class="s" style="font-size:13px;color:var(--muted)">Original: ${esc(s.key)}</div></div>
         <div class="stepper"><button data-go="#/cifra/${s.id}/${enc(keyStep(k, -1))}${e ? '/' + e.id : ''}" aria-label="Meio tom abaixo">${ic('minus', 'sm')}</button><b>${esc(k)}</b><button data-go="#/cifra/${s.id}/${enc(keyStep(k, 1))}${e ? '/' + e.id : ''}" aria-label="Meio tom acima">${ic('plus', 'sm')}</button></div></div>
         ${chips ? `<div class="chips">${chips}</div>` : ''}
-        ${s.pref[S.meId] !== k && me().skills.some((x) => x === 'vocal' || x === 'ministro') ? `<button class="link" style="align-self:flex-start;color:var(--brand);font-weight:600;font-size:13px" data-act="myKey" data-song="${s.id}" data-k="${esc(k)}">Salvar ${esc(k)} como meu tom</button>` : ''}</div>
+        ${s.pref[S.meId] !== k && (sings(me()) || s.pref[S.meId]) ? `<button class="link" style="align-self:flex-start;color:var(--brand);font-weight:600;font-size:13px" data-act="myKey" data-song="${s.id}" data-k="${esc(k)}">${s.pref[S.meId] ? `Salvar ${esc(k)} como meu tom` : `Adicionar ao meu repertório em ${esc(k)}`}</button>` : ''}</div>
       <div class="btn-row"><button class="btn primary" data-go="#/palco/${s.id}/${enc(k)}${e ? '/' + e.id : ''}">${ic('expand', 'sm')} Modo palco</button><a class="btn ghost" href="${yt}" target="_blank" rel="noopener">${ic('play', 'sm')} Ouvir</a></div>
       <div class="card sheet-music">${renderChart(s.chart, s.key, k)}</div>
       <p class="fine">Letra e cifra ilustrativas, cadastradas como exemplo.</p>`;
@@ -558,6 +588,7 @@
       </form>
       <div class="list">
         <button class="row" data-go="#/disponibilidade"><div class="grow"><div class="t" style="font-weight:500">Minha disponibilidade</div></div><span class="chev">${ic('right', 'sm')}</span></button>
+        ${sings(u) || repOf(u.id).length ? `<button class="row" data-go="#/repertorio/${u.id}"><div class="grow"><div class="t" style="font-weight:500">Meu repertório</div><div class="s">${repOf(u.id).length} música${repOf(u.id).length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
         ${S.leader ? `<button class="row" data-go="#/equipe"><div class="grow"><div class="t" style="font-weight:500">Equipe e convites</div><div class="s">${S.people.length} membro${S.people.length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
         <button class="row" data-act="changePw"><div class="grow"><div class="t" style="font-weight:500">Trocar senha</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         <button class="row" data-act="logout" style="color:var(--danger)"><div class="grow"><div class="t" style="font-weight:500">Sair da conta</div></div></button>
@@ -620,7 +651,7 @@
 
   /* ---------------- Roteador ---------------- */
   const TABS = [['inicio', '#/', 'home', 'Início'], ['escalas', '#/escalas', 'cal', 'Escalas'], ['musicas', '#/musicas', 'music', 'Músicas'], ['avisos', '#/avisos', 'mega', 'Avisos'], ['perfil', '#/perfil', 'user', 'Perfil']];
-  const TAB_OF = { inicio: 'inicio', escalas: 'escalas', escala: 'escalas', montar: 'escalas', disponibilidade: 'escalas', compartilhar: 'escalas', musicas: 'musicas', cifra: 'musicas', palco: 'musicas', avisos: 'avisos', perfil: 'perfil', equipe: 'perfil' };
+  const TAB_OF = { inicio: 'inicio', escalas: 'escalas', escala: 'escalas', montar: 'escalas', disponibilidade: 'escalas', compartilhar: 'escalas', musicas: 'musicas', repertorio: 'musicas', cifra: 'musicas', palco: 'musicas', avisos: 'avisos', perfil: 'perfil', equipe: 'perfil' };
   let current = '';
 
   function route() {
@@ -763,13 +794,20 @@
     const pool = ppl.length ? ppl : S.people;
     const defLead = e.team.ministro.pid || pool[0].id;
     sheet(`<h3>Adicionar música</h3>
-      <div class="field"><label for="as-song">Música</label><select id="as-song">${S.songs.slice().sort((a, b) => a.title.localeCompare(b.title, 'pt')).map((s) => `<option value="${s.id}">${esc(s.title)} (${esc(s.key)})</option>`).join('')}</select></div>
-      <div class="grid2"><div class="field"><label for="as-lead">Quem ministra</label><select id="as-lead">${pool.map((p) => `<option value="${p.id}" ${p.id === defLead ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="as-lead">Quem ministra</label><select id="as-lead">${pool.map((p) => `<option value="${p.id}" ${p.id === defLead ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="grid2"><div class="field"><label for="as-song">Música</label><select id="as-song"></select></div>
       <div class="field"><label for="as-key">Tom</label><select id="as-key">${ALL_KEYS.map((k) => `<option>${k}</option>`).join('')}</select></div></div>
       <button class="btn primary block" id="as-ok">Adicionar ao repertório</button>`, (sh) => {
       const sel = sh.querySelector('#as-song'), lead = sh.querySelector('#as-lead'), key = sh.querySelector('#as-key');
       const sync = () => { const s = song(sel.value); key.value = (s.pref && s.pref[lead.value]) || s.key; };
-      sel.addEventListener('change', sync); lead.addEventListener('change', sync); sync();
+      const fill = () => {
+        const cur = sel.value, pid = lead.value, all = S.songs.slice().sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+        const opt = (s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.title)} (${esc(s.pref[pid] || s.key)})</option>`;
+        const mine = all.filter((s) => s.pref[pid]), rest = all.filter((s) => !s.pref[pid]);
+        sel.innerHTML = mine.length ? `<optgroup label="Repertório de ${esc(first(person(pid)))}">${mine.map(opt).join('')}</optgroup><optgroup label="Outras músicas">${rest.map(opt).join('')}</optgroup>` : all.map(opt).join('');
+        sync();
+      };
+      sel.addEventListener('change', sync); lead.addEventListener('change', fill); fill();
       sh.querySelector('#as-ok').addEventListener('click', () => { closeSheet(); saveSetlist(e, e.setlist.concat({ songId: sel.value, key: key.value, lead: lead.value })); });
     });
   };
@@ -827,13 +865,40 @@
     const s = song(el.dataset.song);
     sheet(`<h3>${esc(s.title)}</h3><div class="list">
       <button class="row" data-act="editSong" data-song="${s.id}">${ic('edit', 'sm')}<div class="grow t">Editar música e cifra</div></button>
+      ${s.pref[S.meId] ? `<button class="row" data-act="repRm" data-pid="${S.meId}" data-song="${s.id}">${ic('minus', 'sm')}<div class="grow t">Tirar do meu repertório</div></button>` : ''}
       ${S.leader ? `<button class="row" data-act="delSong" data-song="${s.id}" style="color:var(--danger)">${ic('trash', 'sm')}<div class="grow t">Remover do repertório</div></button>` : ''}</div>`);
   };
   A.editSong = (el) => songSheet(song(el.dataset.song));
+  const repSave = (pid, sid, k, msg) => act(() => sb.from('repertoire').upsert({ member_id: pid, song_id: sid, key: k }, { onConflict: 'member_id,song_id' }), msg);
   A.myKey = (el) => {
-    const s = song(el.dataset.song);
-    act(() => sb.from('songs').update({ pref: Object.assign({}, s.pref, { [S.meId]: el.dataset.k }) }).eq('id', s.id), `Tom ${el.dataset.k} salvo como o seu nesta música.`);
+    const had = song(el.dataset.song).pref[S.meId];
+    repSave(S.meId, el.dataset.song, el.dataset.k, had ? `Tom ${el.dataset.k} salvo como o seu nesta música.` : `Música adicionada ao seu repertório em ${el.dataset.k}.`);
   };
+  const keyOpts = (sel) => ALL_KEYS.map((k) => `<option ${k === sel ? 'selected' : ''}>${k}</option>`).join('');
+  A.repAdd = (el) => {
+    const pid = el.dataset.pid, p = person(pid);
+    const free = S.songs.filter((s) => !s.pref[pid]).sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+    if (!free.length) { toast(S.songs.length ? 'Todas as músicas já estão neste repertório.' : 'Cadastre uma música primeiro.'); return; }
+    sheet(`<h3>Adicionar ao repertório${pid === S.meId ? '' : ' de ' + esc(first(p))}</h3>
+      <div class="field"><label for="ra-song">Música</label><select id="ra-song">${free.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select></div>
+      <div class="field"><label for="ra-key">Tom ${pid === S.meId ? 'que você canta' : 'de ' + esc(first(p))}</label><select id="ra-key"></select></div>
+      <button class="btn primary block" id="ra-ok">Adicionar</button>`, (sh) => {
+      const sel = sh.querySelector('#ra-song'), key = sh.querySelector('#ra-key');
+      const sync = () => { key.innerHTML = keyOpts(song(sel.value).key); };
+      sel.addEventListener('change', sync); sync();
+      sh.querySelector('#ra-ok').addEventListener('click', () => { closeSheet(); repSave(pid, sel.value, key.value, 'Música adicionada ao repertório.'); });
+    });
+  };
+  A.repEdit = (el) => {
+    const pid = el.dataset.pid, s = song(el.dataset.song);
+    sheet(`<h3>${esc(s.title)}</h3><div class="sub">Original em ${esc(s.key)}</div>
+      <div class="field"><label for="re-key">Tom ${pid === S.meId ? 'que você canta' : 'de ' + esc(first(person(pid)))}</label><select id="re-key">${keyOpts(s.pref[pid])}</select></div>
+      <button class="btn primary block" id="re-ok">Salvar tom</button>
+      <button class="btn ghost block" data-act="repRm" data-pid="${pid}" data-song="${s.id}" style="color:var(--danger)">Tirar do repertório</button>`, (sh) => {
+      sh.querySelector('#re-ok').addEventListener('click', () => { closeSheet(); repSave(pid, s.id, sh.querySelector('#re-key').value, 'Tom salvo.'); });
+    });
+  };
+  A.repRm = (el) => { closeSheet(); act(() => sb.from('repertoire').delete().eq('member_id', el.dataset.pid).eq('song_id', el.dataset.song), 'Música tirada do repertório.'); };
   A.delSong = (el) => {
     const s = song(el.dataset.song);
     const usedIn = S.events.filter((e) => e.date >= todayISO() && e.setlist.some((x) => x.songId === s.id));

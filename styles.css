@@ -312,3 +312,13 @@ body.authpage #view { padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)
 .install p.s { color: var(--muted); font-size: 12.5px; }
 .install .kbd { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent-soft); color: #0A84FF; vertical-align: -5px; }
 .install-x { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 8px; }
+
+/* Repertório por ministro */
+.min-strip { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 2px 16px 4px 0; margin-right: -16px; }
+.min-strip::-webkit-scrollbar { display: none; }
+.min-card { flex: none; width: 104px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px 12px; background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 16px; text-align: center; }
+.min-card .avatar { width: 48px; height: 48px; font-size: 15px; }
+.min-card b { font-size: 13.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.min-card span { font-size: 12px; color: var(--muted); }
+.row .row-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; }
+.row:has(.row-main) { padding-right: 6px; }

@@ -11,3 +11,7 @@ Tabelas: `members`, `songs`, `events`, `assignments`, `unavailability`, `notices
 
 A função `functions/conta` cria contas com o código do ministério (sem e-mail de confirmação)
 e faz as ações do líder: senha temporária, remover membro.
+
+## Repertório por ministro
+
+Tabela `repertoire` (member_id, song_id, key): cada ministro guarda as músicas que canta e o tom dele. Todos os membros leem; cada um edita o próprio repertório e líderes editam o de qualquer pessoa. Substitui o antigo `songs.pref` (que não é mais usado pelo app).
