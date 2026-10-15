@@ -30,6 +30,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg);
@@ -301,3 +302,13 @@ body.authpage #view { padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)
 .seg button { height: 40px; border-radius: 9px; font-weight: 600; color: var(--muted); }
 .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(20,32,20,.12); }
 .btn-row .btn { padding: 0 10px; white-space: nowrap; font-size: 14.5px; min-width: 0; }
+
+/* ---------- Instalar ---------- */
+.install { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1.5px solid var(--brand); border-radius: var(--r-card); padding: 14px; position: relative; }
+.install img { border-radius: 10px; flex: none; }
+.install .grow { flex: 1; min-width: 0; padding-right: 22px; }
+.install b { font-size: 15px; }
+.install p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink); }
+.install p.s { color: var(--muted); font-size: 12.5px; }
+.install .kbd { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--accent-soft); color: #0A84FF; vertical-align: -5px; }
+.install-x { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 8px; }

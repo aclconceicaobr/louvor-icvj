@@ -225,6 +225,7 @@
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
     send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+    share: '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
     edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   };
   const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
@@ -256,6 +257,28 @@
     if (f && f.matches('input, textarea')) setTimeout(() => f.focus(), 50);
   }
   function closeSheet() { document.getElementById('sheet-root').innerHTML = ''; }
+
+  /* ---------------- Instalar na tela inicial ---------------- */
+  const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const STANDALONE = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  let installEvt = null;
+  let installHidden = (() => { try { return localStorage.getItem('louvor-install-hidden') === '1'; } catch (e) { return false; } })();
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (!document.querySelector('.sheet')) rerender(); });
+  window.addEventListener('appinstalled', () => { installEvt = null; installHidden = true; rerender(); });
+  function installCard() {
+    if (STANDALONE || installHidden) return '';
+    const close = `<button class="install-x" data-act="hideInstall" aria-label="Fechar">${ic('x', 'sm')}</button>`;
+    if (IS_IOS) {
+      return `<div class="install"><img src="icons/apple-touch-icon.png" alt="" width="44" height="44"><div class="grow"><b>Instale o app no iPhone</b>
+        <p>No Safari, toque em <span class="kbd">${ic('share', 'xs')}</span> Compartilhar (se não aparecer, toque nos <b>•••</b> primeiro), depois em <b>Adicionar à Tela de Início</b> e em <b>Adicionar</b>.</p>
+        <p class="s">Ao abrir pelo ícone, entre de novo com seu e-mail e senha: o iPhone separa o app do Safari.</p></div>${close}</div>`;
+    }
+    if (installEvt) {
+      return `<div class="install"><img src="icons/icon-192.png" alt="" width="44" height="44"><div class="grow"><b>Instale o app</b><p>Fica na tela inicial e abre em tela cheia.</p>
+        <button class="btn primary" style="height:40px;margin-top:6px" data-act="install">Instalar</button></div>${close}</div>`;
+    }
+    return '';
+  }
 
   /* ---------------- Telas ---------------- */
   const views = {};
@@ -292,6 +315,7 @@
       <header class="top"><div class="grow"><div class="sub" style="margin:0">${greet}</div><h1 style="font-size:24px">${esc(first(u))}</h1></div>
         <button class="iconbtn round" data-go="#/avisos" aria-label="Avisos">${ic('bell')}</button>
         <button data-go="#/perfil" aria-label="Perfil">${avatar(u)}</button></header>
+      ${installCard()}
       ${hero}
       ${u.skills.length ? '' : `<button class="card row" data-go="#/perfil"><span class="ic-box" style="background:var(--brand-soft);color:var(--brand)">${ic('mic', 'sm')}</span><div class="grow"><div class="t">Marque suas funções</div><div class="s">Assim o líder consegue te escalar</div></div><span class="chev">${ic('right', 'sm')}</span></button>`}
       <section class="sec"><div class="sec-h"><h2>Esta semana</h2><a class="link" href="#/escalas">Ver escalas</a></div>
@@ -583,7 +607,7 @@
       <div class="auth-card card">
         <div class="seg" role="tablist"><button role="tab" class="${authTab === 'entrar' ? 'on' : ''}" aria-selected="${authTab === 'entrar'}" data-act="authTab" data-t="entrar">Entrar</button><button role="tab" class="${authTab === 'criar' ? 'on' : ''}" aria-selected="${authTab === 'criar'}" data-act="authTab" data-t="criar">Criar conta</button></div>
         ${authTab === 'entrar' ? login : signup}
-      </div></div>`;
+      </div>${installCard()}</div>`;
   }
   const loadingView = () => `<div class="empty-state" style="padding-top:40vh">Carregando escalas…</div>`;
   const orphanView = () => `<header class="top big"><div class="grow"><h1>Quase lá</h1></div></header>
@@ -941,6 +965,8 @@
       });
     });
   };
+  A.hideInstall = () => { installHidden = true; try { localStorage.setItem('louvor-install-hidden', '1'); } catch (e) { /* ok */ } route(); };
+  A.install = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* ok */ } installEvt = null; route(); };
   A.authTab = (el) => { authTab = el.dataset.t; route(); };
 
   /* Modo palco: rolagem, tamanho, tema, tela sempre acesa */
