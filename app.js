@@ -691,6 +691,7 @@
   const TAB_OF = { inicio: 'inicio', escalas: 'escalas', escala: 'escalas', montar: 'escalas', disponibilidade: 'escalas', compartilhar: 'escalas', musicas: 'musicas', repertorio: 'musicas', cifra: 'musicas', palco: 'musicas', avisos: 'avisos', perfil: 'perfil', equipe: 'perfil' };
   let current = '';
 
+  const setBar = (c) => { const m = document.querySelector('meta[name="theme-color"]'); if (m && m.content !== c) m.content = c; };
   function route() {
     const view = document.getElementById('view'), tabs = document.getElementById('tabs');
     stopScroll();
@@ -699,6 +700,7 @@
       document.body.classList.toggle('authpage', !session);
       tabs.hidden = true;
       view.innerHTML = !session ? authView() : !S ? loadingView() : orphanView();
+      setBar(!session ? '#006C00' : '#F4F6F3');
       return;
     }
     document.body.classList.remove('authpage');
@@ -709,9 +711,17 @@
     if (v !== 'palco') { stage && (stage.playing = false); releaseWake(); }
     document.body.classList.toggle('stage', v === 'palco');
     view.innerHTML = views[v](...args);
+    setBar(v === 'palco' ? '#0A120A' : '#F4F6F3');
     const tab = TAB_OF[v];
     tabs.innerHTML = TABS.map(([k, href, icon, label]) => `<a href="${href}" class="${k === tab ? 'on' : ''}" ${k === tab ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></a>`).join('');
-    if (h !== current) { window.scrollTo(0, 0); current = h; }
+    if (h !== current) {
+      // Animação de troca de tela: entra pela direita, volta pela esquerda, troca de aba só esmaece
+      const prev = (current || '').split('/').filter(Boolean), next = h.split('/').filter(Boolean);
+      const dir = v === 'palco' || current === undefined ? '' : TAB_OF[views[prev[0]] ? prev[0] : 'inicio'] !== tab && next.length <= 1 ? 'tab' : next.length >= prev.length ? 'in' : 'back';
+      view.classList.remove('in', 'back', 'tab');
+      if (dir) { void view.offsetWidth; view.classList.add(dir); }
+      window.scrollTo(0, 0); current = h;
+    }
     if (v === 'palco') mountStage();
     if (v === 'musicas') mountSongSearch();
     closeSheet();
@@ -1202,6 +1212,7 @@
   });
   window.addEventListener('hashchange', route);
   window.addEventListener('resize', sizePlayer);
+  window.addEventListener('scroll', () => document.body.classList.toggle('scrolled', window.scrollY > 4), { passive: true });
   window.addEventListener('online', () => session && reload());
 
   /* Tempo real: quando alguém muda algo, todos veem */

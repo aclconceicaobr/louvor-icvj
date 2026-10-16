@@ -337,3 +337,44 @@ body.authpage #view { padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)
 #player.min .pl-media { height: 0; padding: 0; overflow: hidden; }
 body.has-player #view { padding-bottom: calc(var(--nav-h) + var(--player-h, 0px) + 24px + env(safe-area-inset-bottom, 0px)); }
 body.stage #player { display: none; }
+
+/* ---------- Comportamento de app (não de site) ---------- */
+html, body { overscroll-behavior-y: none; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+input, textarea, select, .sheet-music, .stage-scroll, .bubble, .selectable { -webkit-user-select: text; user-select: text; }
+img, svg { -webkit-user-drag: none; }
+/* iPhone dá zoom ao tocar em campos com fonte menor que 16px */
+.field input, .field select, .field textarea, .search input { font-size: 16px; }
+.field textarea { font-size: 14px; }
+@supports (-webkit-touch-callout: none) { .field textarea { font-size: 16px; } }
+
+/* Cabeçalho fixo no topo, como nos apps */
+#view > header.top:first-child {
+  position: sticky; top: 0; z-index: 15;
+  margin: calc(-1 * max(16px, env(safe-area-inset-top, 0px))) calc(-1 * max(16px, env(safe-area-inset-right, 0px))) -8px calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(244, 246, 243, .9); -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px);
+  transition: box-shadow .2s;
+}
+body.scrolled #view > header.top:first-child { box-shadow: 0 1px 0 var(--line); }
+body.stage #view > header.top:first-child { position: static; margin: 0; padding: 0; background: none; backdrop-filter: none; }
+
+/* Resposta ao toque */
+.btn, .row, .chip, .iconbtn, .min-card, #tabs a, .playbtn { transition: transform .12s ease, background-color .15s, opacity .15s; }
+.btn:active, .iconbtn:active, .chip:active, .min-card:active, .playbtn:active { transform: scale(.96); }
+button.row:active, a.row:active, .row-main:active { background: var(--accent-soft) !important; }
+#tabs a:active { opacity: .6; }
+
+/* Aba ativa com destaque em pílula (estilo Android/iOS) */
+#tabs a svg.i { width: 52px; height: 30px; padding: 4px 15px; border-radius: 999px; transition: background-color .2s; }
+#tabs a.on svg.i { background: var(--brand-soft); }
+#tabs { -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px); background: rgba(255, 255, 255, .94); }
+
+/* Transição entre telas */
+@keyframes view-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes view-back { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes view-tab { from { opacity: 0; } to { opacity: 1; } }
+#view.in > * { animation: view-in .22s ease-out both; }
+#view.back > * { animation: view-back .22s ease-out both; }
+#view.tab > * { animation: view-tab .18s ease-out both; }
+#view > header.top:first-child { animation: none !important; }
