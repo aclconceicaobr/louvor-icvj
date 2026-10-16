@@ -8,17 +8,18 @@
     { key: 'bv1', label: 'Backing vocal', skill: 'vocal' },
     { key: 'bv2', label: 'Backing vocal', skill: 'vocal' },
     { key: 'violao', label: 'Violão', skill: 'violao' },
+    { key: 'guitarra', label: 'Guitarra', skill: 'guitarra' },
     { key: 'teclado', label: 'Teclado', skill: 'teclado' },
     { key: 'baixo', label: 'Baixo', skill: 'baixo' },
     { key: 'bateria', label: 'Bateria', skill: 'bateria' },
     { key: 'som', label: 'Som e mídia', skill: 'som' },
     { key: 'projecao', label: 'Projeção', skill: 'projecao' },
   ];
-  const SKILLS = [['ministro', 'Ministro(a)'], ['vocal', 'Vocal'], ['violao', 'Violão'], ['teclado', 'Teclado'], ['baixo', 'Baixo'], ['bateria', 'Bateria'], ['som', 'Som e mídia'], ['projecao', 'Projeção']];
+  const SKILLS = [['ministro', 'Ministro(a)'], ['vocal', 'Vocal'], ['violao', 'Violão'], ['guitarra', 'Guitarra'], ['teclado', 'Teclado'], ['baixo', 'Baixo'], ['bateria', 'Bateria'], ['som', 'Som e mídia'], ['projecao', 'Projeção']];
   const LOGO = 'icons/logo.png';
   const CFG = window.LOUVOR_CONFIG;
   const sb = window.supabase.createClient(CFG.url, CFG.key);
-  const CACHE = 'louvor-icvj-cache-v3';
+  const CACHE = 'louvor-icvj-cache-v4';
 
   /* ---------------- Estado (espelho do banco) ---------------- */
   let S = null;        // { meId, leader, people, songs, events, unavail, mural }
@@ -536,7 +537,7 @@
     const bv = [t('bv1'), t('bv2')].filter(Boolean);
     if (bv.length) lines.push(`Backing: ${bv.join(' e ')}`);
     const pair = (a, b) => [a, b].filter((x) => x[1]).map((x) => `${x[0]}: ${x[1]}`).join(' · ');
-    [pair(['Violão', t('violao')], ['Teclado', t('teclado')]), pair(['Baixo', t('baixo')], ['Bateria', t('bateria')]), pair(['Som e mídia', t('som')], ['Projeção', t('projecao')])]
+    [pair(['Violão', t('violao')], ['Guitarra', t('guitarra')]), pair(['Teclado', t('teclado')], ['Baixo', t('baixo')]), pair(['Bateria', t('bateria')], ['', null]), pair(['Som e mídia', t('som')], ['Projeção', t('projecao')])]
       .filter(Boolean).forEach((l) => lines.push(l));
     if (shareOpts.reps && e.setlist.length) {
       lines.push('', '*Repertório*');
