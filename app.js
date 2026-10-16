@@ -19,7 +19,7 @@
   const LOGO = 'icons/logo.png';
   const CFG = window.LOUVOR_CONFIG;
   const sb = window.supabase.createClient(CFG.url, CFG.key);
-  const CACHE = 'louvor-icvj-cache-v4';
+  const CACHE = 'louvor-icvj-cache-v5';
 
   /* ---------------- Estado (espelho do banco) ---------------- */
   let S = null;        // { meId, leader, people, songs, events, unavail, mural }
@@ -40,7 +40,7 @@
       meId: session.user.id,
       leader: !!(meRow && meRow.is_leader),
       people: members.map((m) => ({ id: m.id, name: m.name, ini: m.ini, skills: m.skills || [], fem: m.fem, leader: m.is_leader })),
-      songs: songs.map((s) => ({ id: s.id, title: s.title, cat: s.cat, bpm: s.bpm, key: s.key, sig: s.sig, chart: s.chart, pref: prefOf(s.id) })),
+      songs: songs.map((s) => ({ id: s.id, title: s.title, cat: s.cat, bpm: s.bpm, key: s.key, sig: s.sig, chart: s.chart, media: s.media_url || '', pref: prefOf(s.id) })),
       rep: reps.map((r) => ({ pid: r.member_id, songId: r.song_id, key: r.key, at: r.created_at })),
       events: evs,
       unavail: unav.map((u) => ({ id: u.id, pid: u.member_id, from: u.from_date, to: u.to_date, reason: u.reason, auto: u.event_id })),
@@ -475,6 +475,35 @@
   };
   const repText = (p, list) => `*Repertório de ${p.name}*\n\n` + list.map((r) => `• ${song(r.songId).title} (${r.key})`).join('\n');
 
+  // Vídeo ou áudio da música, tocado dentro do app
+  function mediaEmbed(url) {
+    if (!url) return null;
+    let u; try { u = new URL(url); } catch (e) { return null; }
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    let yt = null;
+    if (host === 'youtu.be') yt = u.pathname.slice(1);
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com') yt = u.searchParams.get('v') || (u.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]+)/) || [])[1];
+    if (yt && /^[\w-]{6,20}$/.test(yt)) return { kind: 'video', src: `https://www.youtube-nocookie.com/embed/${yt}?playsinline=1&rel=0` };
+    const sp = host === 'open.spotify.com' && u.pathname.match(/^\/(?:intl-[\w-]+\/)?(track|album|playlist|episode)\/(\w+)/);
+    if (sp) return { kind: 'spotify', src: `https://open.spotify.com/embed/${sp[1]}/${sp[2]}`, h: sp[1] === 'track' || sp[1] === 'episode' ? 152 : 352 };
+    if (/\.(mp3|m4a|aac|ogg|wav)$/i.test(u.pathname)) return { kind: 'audio', src: url };
+    return null;
+  }
+  // O player fica fora da tela atual: continua tocando enquanto a pessoa navega pelo app
+  let listenOpen = null;
+  const embedHtml = (m) => m.kind === 'video' ? `<div class="pl-media video"><iframe src="${esc(m.src)}&autoplay=1" title="Vídeo da música" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
+    : m.kind === 'spotify' ? `<div class="pl-media"><iframe src="${esc(m.src)}" title="Áudio da música" height="${m.h}" allow="autoplay; encrypted-media; clipboard-write"></iframe></div>`
+    : `<div class="pl-media"><audio controls autoplay src="${esc(m.src)}"></audio></div>`;
+  function setPlayer(s) {
+    const root = document.getElementById('player');
+    listenOpen = s ? s.id : null;
+    if (!s) { root.innerHTML = ''; root.hidden = true; document.body.classList.remove('has-player'); return; }
+    root.innerHTML = `<div class="pl-bar"><span class="song-ic">${ic('music', 'sm')}</span><button class="grow pl-title" data-go="#/cifra/${s.id}">${esc(s.title)}</button>
+      <button class="iconbtn" data-act="playerMin" aria-label="Minimizar">${ic('minus', 'sm')}</button><button class="iconbtn" data-act="playerClose" aria-label="Fechar">${ic('x', 'sm')}</button></div>${embedHtml(mediaEmbed(s.media))}`;
+    root.hidden = false; root.classList.remove('min'); document.body.classList.add('has-player'); sizePlayer();
+  }
+  function sizePlayer() { const r = document.getElementById('player'); document.documentElement.style.setProperty('--player-h', (r.hidden ? 0 : r.offsetHeight) + 'px'); }
+
   views.cifra = (id, key, evId) => {
     const s = song(id);
     if (!s) return notFound();
@@ -492,9 +521,16 @@
         <div class="stepper"><button data-go="#/cifra/${s.id}/${enc(keyStep(k, -1))}${e ? '/' + e.id : ''}" aria-label="Meio tom abaixo">${ic('minus', 'sm')}</button><b>${esc(k)}</b><button data-go="#/cifra/${s.id}/${enc(keyStep(k, 1))}${e ? '/' + e.id : ''}" aria-label="Meio tom acima">${ic('plus', 'sm')}</button></div></div>
         ${chips ? `<div class="chips">${chips}</div>` : ''}
         ${s.pref[S.meId] !== k && (sings(me()) || s.pref[S.meId]) ? `<button class="link" style="align-self:flex-start;color:var(--brand);font-weight:600;font-size:13px" data-act="myKey" data-song="${s.id}" data-k="${esc(k)}">${s.pref[S.meId] ? `Salvar ${esc(k)} como meu tom` : `Adicionar ao meu repertório em ${esc(k)}`}</button>` : ''}</div>
-      <div class="btn-row"><button class="btn primary" data-go="#/palco/${s.id}/${enc(k)}${e ? '/' + e.id : ''}">${ic('expand', 'sm')} Modo palco</button><a class="btn ghost" href="${yt}" target="_blank" rel="noopener">${ic('play', 'sm')} Ouvir</a></div>
+      <div class="btn-row"><button class="btn primary" data-go="#/palco/${s.id}/${enc(k)}${e ? '/' + e.id : ''}">${ic('expand', 'sm')} Modo palco</button>${listenBtn(s, yt)}</div>
       <div class="card sheet-music">${renderChart(s.chart, s.key, k)}</div>
       <p class="fine">Letra e cifra ilustrativas, cadastradas como exemplo.</p>`;
+  };
+
+  const listenBtn = (s, yt) => {
+    const m = mediaEmbed(s.media);
+    if (m) return `<button class="btn ghost" data-act="listen" data-song="${s.id}">${ic(listenOpen === s.id ? 'pause' : 'play', 'sm')} ${listenOpen === s.id ? 'Parar' : 'Ouvir'}</button>`;
+    if (s.media) return `<a class="btn ghost" href="${esc(s.media)}" target="_blank" rel="noopener">${ic('play', 'sm')} Ouvir</a>`;
+    return `<button class="btn ghost" data-act="addMedia" data-song="${s.id}">${ic('play', 'sm')} Ouvir</button>`;
   };
 
   /* Modo palco */
@@ -870,6 +906,25 @@
       ${S.leader ? `<button class="row" data-act="delSong" data-song="${s.id}" style="color:var(--danger)">${ic('trash', 'sm')}<div class="grow t">Remover do repertório</div></button>` : ''}</div>`);
   };
   A.editSong = (el) => songSheet(song(el.dataset.song));
+  A.listen = (el) => { setPlayer(listenOpen === el.dataset.song ? null : song(el.dataset.song)); rerender(); };
+  A.playerMin = () => { const r = document.getElementById('player'); r.classList.toggle('min'); sizePlayer(); };
+  A.playerClose = () => { setPlayer(null); rerender(); };
+  A.addMedia = (el) => {
+    const s = song(el.dataset.song);
+    const yt = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(s.title + ' louvor');
+    sheet(`<h3>Ouvir “${esc(s.title)}”</h3><div class="sub">Cole o link do vídeo ou do áudio uma vez e ele passa a tocar aqui no app para toda a equipe.</div>
+      <a class="btn ghost block" href="${yt}" target="_blank" rel="noopener">${ic('search', 'sm')} Procurar no YouTube</a>
+      <div class="field"><label for="md-url">Link do YouTube, Spotify ou arquivo MP3</label><input id="md-url" type="url" inputmode="url" placeholder="https://youtu.be/…" autocomplete="off"></div>
+      <button class="btn primary block" id="md-ok">Salvar e ouvir</button>`, (sh) => {
+      sh.querySelector('#md-ok').addEventListener('click', async () => {
+        const url = sh.querySelector('#md-url').value.trim();
+        if (!/^https?:\/\/\S+$/.test(url)) { toast('Cole um link que comece com https://'); return; }
+        closeSheet();
+        const ok = await act(() => sb.from('songs').update({ media_url: url }).eq('id', s.id), mediaEmbed(url) ? 'Link salvo. Tocando aqui no app.' : 'Link salvo. Ele abre fora do app.');
+        if (ok && mediaEmbed(url)) { setPlayer(song(s.id)); rerender(); }
+      });
+    });
+  };
   const repSave = (pid, sid, k, msg) => act(() => sb.from('repertoire').upsert({ member_id: pid, song_id: sid, key: k }, { onConflict: 'member_id,song_id' }), msg);
   A.myKey = (el) => {
     const had = song(el.dataset.song).pref[S.meId];
@@ -923,13 +978,16 @@
         <div class="field"><label for="ns-key">Tom original</label><select id="ns-key">${ALL_KEYS.map((k) => `<option ${s && s.key === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div></div>
       <div class="grid2"><div class="field"><label for="ns-bpm">BPM</label><input id="ns-bpm" type="number" inputmode="numeric" min="20" max="300" value="${s ? s.bpm : 80}"></div>
         <div class="field"><label for="ns-sig">Compasso</label><select id="ns-sig">${['4/4', '3/4', '6/8', '2/4'].map((x) => `<option ${s && s.sig === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+      <div class="field"><label for="ns-media">Link para ouvir (YouTube, Spotify ou MP3)</label><input id="ns-media" type="url" inputmode="url" value="${s ? esc(s.media) : ''}" placeholder="https://youtu.be/…" autocomplete="off"></div>
       <div class="field"><label for="ns-chart">Cifra (acordes na linha de cima da letra; seções entre colchetes, ex.: [Refrão])</label><textarea id="ns-chart" rows="10" spellcheck="false" placeholder="[Verso 1]&#10;G        D&#10;Primeira linha da letra">${s ? esc(s.chart) : ''}</textarea></div>
       <button class="btn primary block" id="ns-ok">${s ? 'Salvar alterações' : 'Adicionar ao repertório'}</button>`, (sh) => {
       sh.querySelector('#ns-ok').addEventListener('click', async (ev) => {
         const title = sh.querySelector('#ns-title').value.trim();
         if (!title) { toast('Dê um título para a música.'); return; }
         const bpm = Math.min(300, Math.max(20, Number(sh.querySelector('#ns-bpm').value) || 80));
-        const data = { title, cat: sh.querySelector('#ns-cat').value, key: sh.querySelector('#ns-key').value, bpm, sig: sh.querySelector('#ns-sig').value, chart: sh.querySelector('#ns-chart').value };
+        const media = sh.querySelector('#ns-media').value.trim();
+        if (media && !/^https?:\/\/\S+$/.test(media)) { toast('O link para ouvir precisa começar com https://'); return; }
+        const data = { title, cat: sh.querySelector('#ns-cat').value, key: sh.querySelector('#ns-key').value, bpm, sig: sh.querySelector('#ns-sig').value, chart: sh.querySelector('#ns-chart').value, media_url: media || null };
         ev.currentTarget.disabled = true;
         try {
           const r = s ? await must(sb.from('songs').update(data).eq('id', s.id).select('id').single()) : await must(sb.from('songs').insert(data).select('id').single());
@@ -954,7 +1012,7 @@
 
   /* Perfil e equipe */
   A.toggleChip = (el) => { el.classList.toggle('on'); el.setAttribute('aria-pressed', el.classList.contains('on')); };
-  A.logout = async () => { authTab = 'entrar'; inviteCode = null; try { localStorage.removeItem(CACHE); } catch (e) { /* ok */ } await sb.auth.signOut(); };
+  A.logout = async () => { setPlayer(null); authTab = 'entrar'; inviteCode = null; try { localStorage.removeItem(CACHE); } catch (e) { /* ok */ } await sb.auth.signOut(); };
   A.changePw = () => {
     sheet(`<h3>Trocar senha</h3>
       <div class="field"><label for="pw-new">Nova senha</label><input id="pw-new" type="password" autocomplete="new-password" minlength="6" placeholder="Pelo menos 6 caracteres"></div>
@@ -1143,6 +1201,7 @@
     else if (session) reload();
   });
   window.addEventListener('hashchange', route);
+  window.addEventListener('resize', sizePlayer);
   window.addEventListener('online', () => session && reload());
 
   /* Tempo real: quando alguém muda algo, todos veem */
