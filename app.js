@@ -467,11 +467,11 @@
     if (!p) return notFound();
     const list = repOf(pid).sort((a, b) => song(a.songId).title.localeCompare(song(b.songId).title, 'pt'));
     const edit = canEditRep(pid);
-    const rows = list.map((r) => { const s = song(r.songId); return `<div class="row"><button class="row-main" data-go="#/cifra/${s.id}/${enc(r.key)}"><span class="song-ic">${ic('music', 'sm')}</span><div class="grow"><div class="t">${esc(s.title)}</div><div class="s">${esc(s.cat)} • ${s.bpm} BPM${r.key !== s.key ? ' • original em ' + esc(s.key) : ''}</div></div><span class="tom"><span>TOM</span><b>${esc(r.key)}</b></span></button>${edit ? `<button class="iconbtn" data-act="repEdit" data-pid="${pid}" data-song="${s.id}" aria-label="Mudar tom ou tirar">${ic('more', 'sm')}</button>` : ''}</div>`; }).join('');
+    const rows = list.map((r) => { const s = song(r.songId); return `<div class="row"><button class="row-main" data-go="#/cifra/${s.id}/${enc(r.key)}"><span class="song-ic">${ic(listenOpen === s.id ? 'play' : 'music', 'sm')}</span><div class="grow"><div class="t">${esc(s.title)}</div><div class="s">${esc(s.cat)} • ${s.bpm} BPM${r.key !== s.key ? ' • original em ' + esc(s.key) : ''}${s.media ? '' : ' • sem link para ouvir'}</div></div><span class="tom"><span>TOM</span><b>${esc(r.key)}</b></span></button>${edit ? `<button class="iconbtn" data-act="repEdit" data-pid="${pid}" data-song="${s.id}" aria-label="Mudar tom ou tirar">${ic('more', 'sm')}</button>` : ''}</div>`; }).join('');
     const title = pid === S.meId ? 'Meu repertório' : 'Repertório de ' + first(p);
     return `
       <header class="top">${back('#/musicas')}<div class="grow"><h1>${esc(title)}</h1><div class="sub">${esc(p.name)} • ${list.length} música${list.length === 1 ? '' : 's'}</div></div></header>
-      ${edit || list.length ? `<div class="btn-row">${edit ? `<button class="btn primary" data-act="repAdd" data-pid="${pid}">${ic('plus', 'sm')} Adicionar música</button>` : ''}${list.length ? `<a class="btn whats" href="https://wa.me/?text=${encodeURIComponent(repText(p, list))}" target="_blank" rel="noopener">${ic('chat', 'sm')} Enviar</a>` : ''}</div>` : ''}
+      ${edit || list.length ? `<div class="btn-row">${list.length ? `<button class="btn primary" data-act="playAll" data-pid="${pid}">${ic('play', 'sm')} Tocar tudo</button>` : ''}${edit ? `<button class="btn ${list.length ? 'ghost' : 'primary'}" data-act="repAdd" data-pid="${pid}">${ic('plus', 'sm')} Adicionar</button>` : ''}${list.length ? `<a class="btn whats" href="https://wa.me/?text=${encodeURIComponent(repText(p, list))}" target="_blank" rel="noopener">${ic('chat', 'sm')} Enviar</a>` : ''}</div>` : ''}
       <div class="rows-sep">${rows || `<div class="card empty-state">${edit ? 'Nenhuma música ainda. Toque em Adicionar música, ou abra uma cifra e salve o seu tom.' : esc(first(p)) + ' ainda não montou o repertório.'}</div>`}</div>`;
   };
   const repText = (p, list) => `*Repertório de ${p.name}*\n\n` + list.map((r) => `• ${song(r.songId).title} (${r.key})`).join('\n');
@@ -491,18 +491,39 @@
     return null;
   }
   // O player fica fora da tela atual: continua tocando enquanto a pessoa navega pelo app
-  let listenOpen = null;
-  const embedHtml = (m) => m.kind === 'video' ? `<div class="pl-media video"><iframe src="${esc(m.src)}&autoplay=1" title="Vídeo da música" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
-    : m.kind === 'spotify' ? `<div class="pl-media"><iframe src="${esc(m.src)}" title="Áudio da música" height="${m.h}" allow="autoplay; encrypted-media; clipboard-write"></iframe></div>`
-    : `<div class="pl-media"><audio controls autoplay src="${esc(m.src)}"></audio></div>`;
-  function setPlayer(s) {
+  // Fila: uma música só, ou a playlist de um ministro tocando em sequência
+  let listenOpen = null, queue = null; // queue = { ids, i, label }
+  const embedHtml = (m) => m.kind === 'video' ? `<div class="pl-media video"><iframe id="pl-frame" src="${esc(m.src)}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" title="Vídeo da música" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
+    : m.kind === 'spotify' ? `<div class="pl-media"><iframe id="pl-frame" src="${esc(m.src)}" title="Áudio da música" height="${m.h}" allow="autoplay; encrypted-media; clipboard-write"></iframe></div>`
+    : `<div class="pl-media"><audio id="pl-audio" controls autoplay src="${esc(m.src)}"></audio></div>`;
+  function setPlayer(s, q) {
     const root = document.getElementById('player');
     listenOpen = s ? s.id : null;
+    queue = s ? q || { ids: [s.id], i: 0, label: '' } : null;
     if (!s) { root.innerHTML = ''; root.hidden = true; document.body.classList.remove('has-player'); return; }
-    root.innerHTML = `<div class="pl-bar"><span class="song-ic">${ic('music', 'sm')}</span><button class="grow pl-title" data-go="#/cifra/${s.id}">${esc(s.title)}</button>
+    const many = queue.ids.length > 1, wasMin = root.classList.contains('min') && !root.hidden;
+    root.innerHTML = `<div class="pl-bar"><span class="song-ic">${ic('music', 'sm')}</span><button class="grow pl-title" data-go="#/cifra/${s.id}"><span>${esc(s.title)}</span>${many ? `<small>${queue.i + 1} de ${queue.ids.length}${queue.label ? ' • ' + esc(queue.label) : ''}</small>` : ''}</button>
+      ${many ? `<button class="iconbtn" data-act="playerPrev" aria-label="Anterior" ${queue.i === 0 ? 'disabled' : ''}>${ic('prev', 'sm')}</button><button class="iconbtn" data-act="playerNext" aria-label="Próxima" ${queue.i === queue.ids.length - 1 ? 'disabled' : ''}>${ic('next', 'sm')}</button>` : ''}
       <button class="iconbtn" data-act="playerMin" aria-label="Minimizar">${ic('minus', 'sm')}</button><button class="iconbtn" data-act="playerClose" aria-label="Fechar">${ic('x', 'sm')}</button></div>${embedHtml(mediaEmbed(s.media))}`;
-    root.hidden = false; root.classList.remove('min'); document.body.classList.add('has-player'); sizePlayer();
+    root.hidden = false; root.classList.toggle('min', wasMin); document.body.classList.add('has-player'); sizePlayer();
+    const au = document.getElementById('pl-audio'); if (au) au.addEventListener('ended', playerNext);
+    const fr = document.getElementById('pl-frame');
+    if (fr && mediaEmbed(s.media).kind === 'video') fr.addEventListener('load', () => {
+      // pede ao YouTube para avisar quando o vídeo terminar
+      try { fr.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'pl' }), '*'); fr.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }), '*'); } catch (e) { /* ok */ }
+    });
   }
+  function playerNext() {
+    if (!queue || queue.i >= queue.ids.length - 1) return;
+    const q = Object.assign({}, queue, { i: queue.i + 1 });
+    setPlayer(song(q.ids[q.i]), q); rerender();
+  }
+  window.addEventListener('message', (ev) => {
+    if (!/youtube(-nocookie)?\.com$/.test((() => { try { return new URL(ev.origin).hostname; } catch (e) { return ''; } })())) return;
+    let d; try { d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
+    const st = d && (d.event === 'onStateChange' ? d.info : d.event === 'infoDelivery' && d.info ? d.info.playerState : undefined);
+    if (st === 0) playerNext();
+  });
   function sizePlayer() { const r = document.getElementById('player'); document.documentElement.style.setProperty('--player-h', (r.hidden ? 0 : r.offsetHeight) + 'px'); }
 
   views.cifra = (id, key, evId) => {
@@ -932,6 +953,17 @@
   A.listen = (el) => { setPlayer(listenOpen === el.dataset.song ? null : song(el.dataset.song)); rerender(); };
   A.playerMin = () => { const r = document.getElementById('player'); r.classList.toggle('min'); sizePlayer(); };
   A.playerClose = () => { setPlayer(null); rerender(); };
+  A.playerNext = () => playerNext();
+  A.playerPrev = () => { if (queue && queue.i > 0) { const q = Object.assign({}, queue, { i: queue.i - 1 }); setPlayer(song(q.ids[q.i]), q); rerender(); } };
+  A.playAll = (el) => {
+    const pid = el.dataset.pid, p = person(pid);
+    const ids = repOf(pid).sort((a, b) => song(a.songId).title.localeCompare(song(b.songId).title, 'pt')).map((r) => r.songId).filter((id) => mediaEmbed(song(id).media));
+    if (!ids.length) { toast('Nenhuma música deste repertório tem link para ouvir. Abra a música e toque em Ouvir para colocar.'); return; }
+    setPlayer(song(ids[0]), { ids, i: 0, label: pid === S.meId ? 'Meu repertório' : 'Repertório de ' + first(p) });
+    rerender();
+    const miss = repOf(pid).length - ids.length;
+    if (miss) toast(`Tocando ${ids.length} música${ids.length === 1 ? '' : 's'}. ${miss} ainda sem link para ouvir.`);
+  };
   A.addMedia = (el) => {
     const s = song(el.dataset.song);
     const yt = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(s.title + ' louvor');
