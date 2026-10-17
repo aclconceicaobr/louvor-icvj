@@ -1,5 +1,5 @@
 /* Service worker: guarda o app para abrir sem internet (útil no culto). */
-const CACHE = 'louvor-icvj-v12';
+const CACHE = 'louvor-icvj-v13';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/logo.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

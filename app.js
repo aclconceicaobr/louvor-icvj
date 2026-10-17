@@ -651,6 +651,7 @@
         ${S.leader ? `<button class="row" data-go="#/equipe"><div class="grow"><div class="t" style="font-weight:500">Equipe e convites</div><div class="s">${S.people.length} membro${S.people.length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
         <div class="row" style="flex-wrap:wrap;gap:10px"><div class="grow"><div class="t" style="font-weight:500">Aparência</div><div class="s">Modo verde deixa o app todo no verde da igreja</div></div>
           <div class="seg three" style="width:100%">${[['claro', 'Claro'], ['verde', 'Verde'], ['auto', 'Automático']].map(([k, l]) => `<button type="button" class="${getTheme() === k ? 'on' : ''}" data-act="theme" data-t="${k}" aria-pressed="${getTheme() === k}">${l}</button>`).join('')}</div></div>
+        <button class="row" data-go="#/boas-vindas"><div class="grow"><div class="t" style="font-weight:500">Ver apresentação do app</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         <button class="row" data-act="changePw"><div class="grow"><div class="t" style="font-weight:500">Trocar senha</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         <button class="row" data-act="logout" style="color:var(--danger)"><div class="grow"><div class="t" style="font-weight:500">Sair da conta</div></div></button>
       </div>
@@ -678,6 +679,46 @@
 
   /* ---------------- Entrar / criar conta ---------------- */
   let authTab = 'entrar';
+
+  /* ---------------- Onboarding: apresentação no primeiro acesso ---------------- */
+  const ONB_KEY = 'louvor-onboarding-visto';
+  const onbSeen = () => { try { return localStorage.getItem(ONB_KEY) === '1'; } catch (e) { return true; } };
+  const ONB = [
+    { t: 'Bem-vindo ao Louvor ICVJ', d: 'Tudo do Ministério de Louvor num lugar só: escalas, cifras, músicas e avisos da equipe.',
+      art: () => `<div class="onb-logo"><img src="${LOGO}" alt="" width="132" height="132"></div>` },
+    { t: 'Sua escala na palma da mão', d: 'Veja quando você serve, confirme presença com um toque e avise o líder se precisar trocar.',
+      art: () => `<div class="onb-mock"><div class="onb-card"><span class="datebox on"><span>Dom</span><b>19</b></span><div class="grow"><div class="t">Culto de Domingo</div><div class="s">18:00 • Ensaio sáb 16:00</div></div></div>
+        <div class="onb-card"><span class="avatar">VC</span><div class="grow"><div class="t">Violão</div><div class="s">Você</div></div><span class="pill confirmado">${ic('check', 'xs')} Confirmado</span></div>
+        <div class="onb-card dim"><span class="avatar">RS</span><div class="grow"><div class="t">Ministra</div><div class="s">Rebeca</div></div><span class="pill pendente">Pendente</span></div></div>` },
+    { t: 'Cifras no seu tom', d: 'Mude o tom com um toque, guarde as músicas no seu repertório e use o modo palco durante o culto.',
+      art: () => `<div class="onb-mock"><div class="onb-card"><div class="grow"><div class="s">TOM</div><div class="t">Rio de Graça</div></div><div class="stepper"><button tabindex="-1">${ic('minus', 'sm')}</button><b>A</b><button tabindex="-1">${ic('plus', 'sm')}</button></div></div>
+        <div class="onb-card sheet-music"><div><div class="ln ch">A               E</div><div class="ln">Corre um rio de graça</div><div class="ln ch">F#m             D</div><div class="ln">Sobre o meu coração</div></div></div></div>` },
+    { t: 'Ouça e ensaie', d: 'Toque o vídeo de cada música dentro do app e ouça o repertório de cada ministro em sequência.',
+      art: () => `<div class="onb-mock"><div class="onb-card"><span class="avatar">AC</span><div class="grow"><div class="t">Repertório do Alan</div><div class="s">12 músicas</div></div><span class="onb-play">${ic('play', 'sm')}</span></div>
+        <div class="onb-card"><span class="song-ic">${ic('music', 'sm')}</span><div class="grow"><div class="t">Pão da Vida</div><div class="s">2 de 12 • tocando</div></div><span class="onb-eq"><i></i><i></i><i></i></span></div></div>` },
+  ];
+  function onboardingView(replay) {
+    return `<div class="onb" id="onb">
+      <div class="onb-top"><button class="onb-skip" data-act="onbDone" data-replay="${replay ? 1 : ''}">Pular</button></div>
+      <div class="onb-track" id="onb-track">${ONB.map((o, i) => `<section class="onb-slide" aria-label="${i + 1} de ${ONB.length}"><div class="onb-art">${o.art()}</div><h1>${esc(o.t)}</h1><p>${esc(o.d)}</p></section>`).join('')}</div>
+      <div class="onb-foot"><div class="onb-dots" id="onb-dots">${ONB.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>
+        <div id="onb-next-wrap"><button class="btn onb-btn block" data-act="onbNext">Próximo</button></div>
+        <div id="onb-end-wrap" hidden>${replay ? `<button class="btn onb-btn block" data-act="onbDone" data-replay="1">Voltar ao app</button>` : `<button class="btn onb-btn block" data-act="onbDone" data-t="criar">Criar minha conta</button><button class="btn onb-ghost block" data-act="onbDone" data-t="entrar">Já tenho conta</button>`}</div></div>
+    </div>`;
+  }
+  function mountOnboarding() {
+    const tr = document.getElementById('onb-track');
+    if (!tr) return;
+    const sync = () => {
+      const i = Math.round(tr.scrollLeft / tr.clientWidth), last = i >= ONB.length - 1;
+      document.querySelectorAll('#onb-dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+      document.getElementById('onb-next-wrap').hidden = last;
+      document.getElementById('onb-end-wrap').hidden = !last;
+      document.querySelector('.onb-skip').style.visibility = last ? 'hidden' : '';
+    };
+    tr.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+    sync();
+  }
   function authView() {
     const login = `
       <form class="auth-form" data-form="login">
@@ -733,11 +774,17 @@
       document.body.classList.remove('stage');
       document.body.classList.toggle('authpage', !session);
       tabs.hidden = true;
-      view.innerHTML = !session ? authView() : !S ? loadingView() : orphanView();
+      const onb = !session && !onbSeen();
+      document.body.classList.toggle('onbpage', onb);
+      view.innerHTML = onb ? onboardingView(false) : !session ? authView() : !S ? loadingView() : orphanView();
+      if (onb) mountOnboarding();
       setBar(!session ? '#006C00' : cssBg());
       return;
     }
     document.body.classList.remove('authpage');
+    const h0 = location.hash.replace(/^#\/?/, '');
+    if (h0 === 'boas-vindas') { document.body.classList.add('authpage', 'onbpage'); tabs.hidden = true; view.innerHTML = onboardingView(true); mountOnboarding(); setBar('#006C00'); return; }
+    document.body.classList.remove('onbpage');
     tabs.hidden = false;
     const h = location.hash.replace(/^#\/?/, '');
     const [name, ...args] = h.split('/').filter(Boolean);
@@ -1192,6 +1239,12 @@
   };
   A.hideInstall = () => { installHidden = true; try { localStorage.setItem('louvor-install-hidden', '1'); } catch (e) { /* ok */ } route(); };
   A.install = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* ok */ } installEvt = null; route(); };
+  A.onbNext = () => { const tr = document.getElementById('onb-track'); tr.scrollBy({ left: tr.clientWidth, behavior: 'smooth' }); };
+  A.onbDone = (el) => {
+    try { localStorage.setItem(ONB_KEY, '1'); } catch (e) { /* ok */ }
+    if (el.dataset.replay) { go('#/perfil'); return; }
+    authTab = el.dataset.t || 'entrar'; route();
+  };
   A.authTab = (el) => { authTab = el.dataset.t; route(); };
 
   /* Modo palco: rolagem, tamanho, tema, tela sempre acesa */
