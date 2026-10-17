@@ -627,6 +627,8 @@
         <button class="row" data-go="#/disponibilidade"><div class="grow"><div class="t" style="font-weight:500">Minha disponibilidade</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         ${sings(u) || repOf(u.id).length ? `<button class="row" data-go="#/repertorio/${u.id}"><div class="grow"><div class="t" style="font-weight:500">Meu repertório</div><div class="s">${repOf(u.id).length} música${repOf(u.id).length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
         ${S.leader ? `<button class="row" data-go="#/equipe"><div class="grow"><div class="t" style="font-weight:500">Equipe e convites</div><div class="s">${S.people.length} membro${S.people.length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
+        <div class="row" style="flex-wrap:wrap;gap:10px"><div class="grow"><div class="t" style="font-weight:500">Aparência</div><div class="s">Modo verde deixa o app todo no verde da igreja</div></div>
+          <div class="seg three" style="width:100%">${[['claro', 'Claro'], ['verde', 'Verde'], ['auto', 'Automático']].map(([k, l]) => `<button type="button" class="${getTheme() === k ? 'on' : ''}" data-act="theme" data-t="${k}" aria-pressed="${getTheme() === k}">${l}</button>`).join('')}</div></div>
         <button class="row" data-act="changePw"><div class="grow"><div class="t" style="font-weight:500">Trocar senha</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         <button class="row" data-act="logout" style="color:var(--danger)"><div class="grow"><div class="t" style="font-weight:500">Sair da conta</div></div></button>
       </div>
@@ -691,6 +693,16 @@
   const TAB_OF = { inicio: 'inicio', escalas: 'escalas', escala: 'escalas', montar: 'escalas', disponibilidade: 'escalas', compartilhar: 'escalas', musicas: 'musicas', repertorio: 'musicas', cifra: 'musicas', palco: 'musicas', avisos: 'avisos', perfil: 'perfil', equipe: 'perfil' };
   let current = '';
 
+  // Tema: claro, verde ou automático (segue o modo escuro do celular)
+  const THEME_KEY = 'louvor-theme';
+  const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || 'claro'; } catch (e) { return 'claro'; } };
+  const darkMQ = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  function applyTheme() {
+    const t = getTheme(), verde = t === 'verde' || (t === 'auto' && darkMQ && darkMQ.matches);
+    if (verde) document.documentElement.dataset.theme = 'verde'; else delete document.documentElement.dataset.theme;
+  }
+  if (darkMQ && darkMQ.addEventListener) darkMQ.addEventListener('change', () => { applyTheme(); rerender(); });
+  const cssBg = () => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#F4F6F3';
   const setBar = (c) => { const m = document.querySelector('meta[name="theme-color"]'); if (m && m.content !== c) m.content = c; };
   function route() {
     const view = document.getElementById('view'), tabs = document.getElementById('tabs');
@@ -700,7 +712,7 @@
       document.body.classList.toggle('authpage', !session);
       tabs.hidden = true;
       view.innerHTML = !session ? authView() : !S ? loadingView() : orphanView();
-      setBar(!session ? '#006C00' : '#F4F6F3');
+      setBar(!session ? '#006C00' : cssBg());
       return;
     }
     document.body.classList.remove('authpage');
@@ -711,7 +723,7 @@
     if (v !== 'palco') { stage && (stage.playing = false); releaseWake(); }
     document.body.classList.toggle('stage', v === 'palco');
     view.innerHTML = views[v](...args);
-    setBar(v === 'palco' ? '#0A120A' : '#F4F6F3');
+    setBar(v === 'palco' ? '#0A120A' : cssBg());
     const tab = TAB_OF[v];
     tabs.innerHTML = TABS.map(([k, href, icon, label]) => `<a href="${href}" class="${k === tab ? 'on' : ''}" ${k === tab ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></a>`).join('');
     if (h !== current) {
@@ -1021,6 +1033,7 @@
   A.rmAviso = (el) => act(() => sb.from('notices').delete().eq('id', el.dataset.id), 'Aviso apagado.');
 
   /* Perfil e equipe */
+  A.theme = (el) => { try { localStorage.setItem(THEME_KEY, el.dataset.t); } catch (e) { /* ok */ } applyTheme(); rerender(); setBar(cssBg()); };
   A.toggleChip = (el) => { el.classList.toggle('on'); el.setAttribute('aria-pressed', el.classList.contains('on')); };
   A.logout = async () => { setPlayer(null); authTab = 'entrar'; inviteCode = null; try { localStorage.removeItem(CACHE); } catch (e) { /* ok */ } await sb.auth.signOut(); };
   A.changePw = () => {

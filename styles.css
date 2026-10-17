@@ -378,3 +378,37 @@ button.row:active, a.row:active, .row-main:active { background: var(--accent-sof
 #view.back > * { animation: view-back .22s ease-out both; }
 #view.tab > * { animation: view-tab .18s ease-out both; }
 #view > header.top:first-child { animation: none !important; }
+
+/* ---------- Modo verde: o app todo no verde da igreja ---------- */
+html[data-theme="verde"] {
+  --brand: #8FD88F;
+  --brand-strong: #B5E8B5;
+  --brand-soft: #1F4D24;
+  --on-brand: #082008;
+  --ink: #EAF5EA;
+  --muted: #A3BFA3;
+  --line: #24502A;
+  --bg: #0B2A0D;
+  --surface: #123816;
+  --accent: #5E7F5E;
+  --accent-ink: #CFE3CF;
+  --accent-soft: #1A4220;
+  --danger: #FF8A80;
+  --danger-soft: #4A1E1E;
+  color-scheme: dark;
+}
+@media (min-width: 520px) { html[data-theme="verde"] body { background: #071D09; } }
+html[data-theme="verde"] .chip.on,
+html[data-theme="verde"] #toast { color: var(--bg); }
+html[data-theme="verde"] #view > header.top:first-child { background: rgba(11, 42, 13, .88); }
+html[data-theme="verde"] #tabs { background: rgba(14, 50, 18, .94); }
+html[data-theme="verde"] .hero { background: linear-gradient(160deg, #006C00, #0F5214); color: #fff; }
+html[data-theme="verde"] .hero .btn.on-light { background: #fff; color: #006C00; }
+html[data-theme="verde"] .seg button.on { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
+html[data-theme="verde"] .sheet-back { background: rgba(0, 0, 0, .55); }
+html[data-theme="verde"] #player { box-shadow: 0 -6px 20px rgba(0, 0, 0, .3); }
+html[data-theme="verde"] #splash,
+html[data-theme="verde"] body.authpage,
+html[data-theme="verde"] body.authpage #app { background: #006C00; }
+html[data-theme="verde"] body.authpage { --on-brand: #fff; }
+.seg.three { grid-template-columns: 1fr 1fr 1fr; }

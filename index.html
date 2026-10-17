@@ -10,6 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Louvor ICVJ">
+<script>/* aplica o tema antes de desenhar, para não piscar */try{var t=localStorage.getItem('louvor-theme')||'claro';if(t==='auto')t=matchMedia('(prefers-color-scheme: dark)').matches?'verde':'claro';if(t==='verde'){document.documentElement.dataset.theme='verde';document.querySelector('meta[name="theme-color"]').content='#0B2A0D';}}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png?v=4">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=4">
