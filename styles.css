@@ -412,3 +412,9 @@ html[data-theme="verde"] body.authpage,
 html[data-theme="verde"] body.authpage #app { background: #006C00; }
 html[data-theme="verde"] body.authpage { --on-brand: #fff; }
 .seg.three { grid-template-columns: 1fr 1fr 1fr; }
+
+/* Foto de perfil */
+.avatar { overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-edit { position: relative; flex: none; border-radius: 50%; }
+.avatar-edit .cam { position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: var(--on-brand); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--surface); }

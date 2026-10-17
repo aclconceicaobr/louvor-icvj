@@ -19,7 +19,7 @@
   const LOGO = 'icons/logo.png';
   const CFG = window.LOUVOR_CONFIG;
   const sb = window.supabase.createClient(CFG.url, CFG.key);
-  const CACHE = 'louvor-icvj-cache-v5';
+  const CACHE = 'louvor-icvj-cache-v6';
 
   /* ---------------- Estado (espelho do banco) ---------------- */
   let S = null;        // { meId, leader, people, songs, events, unavail, mural }
@@ -39,7 +39,7 @@
     return {
       meId: session.user.id,
       leader: !!(meRow && meRow.is_leader),
-      people: members.map((m) => ({ id: m.id, name: m.name, ini: m.ini, skills: m.skills || [], fem: m.fem, leader: m.is_leader })),
+      people: members.map((m) => ({ id: m.id, name: m.name, ini: m.ini, photo: m.avatar_url || '', skills: m.skills || [], fem: m.fem, leader: m.is_leader })),
       songs: songs.map((s) => ({ id: s.id, title: s.title, cat: s.cat, bpm: s.bpm, key: s.key, sig: s.sig, chart: s.chart, media: s.media_url || '', pref: prefOf(s.id) })),
       rep: reps.map((r) => ({ pid: r.member_id, songId: r.song_id, key: r.key, at: r.created_at })),
       events: evs,
@@ -227,6 +227,7 @@
     swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
     chat: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/>',
     copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
     play: '<path d="M7 4v16l13-8z" fill="currentColor"/>', pause: '<path d="M9 5v14M15 5v14"/>',
     prev: '<path d="M19 20 9 12l10-8zM5 19V5"/>', next: '<path d="m5 4 10 8-10 8zM19 5v14"/>',
     expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
@@ -245,7 +246,7 @@
     troca: [ic('swap', 'xs'), 'Troca solicitada'],
   };
   const pill = (st) => `<span class="pill ${st}">${STATUS[st][0]}${STATUS[st][1]}</span>`;
-  const avatar = (p, cls = '') => `<span class="avatar ${cls}">${p ? esc(initials(p)) : '?'}</span>`;
+  const avatar = (p, cls = '') => `<span class="avatar ${cls}">${p && p.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy" decoding="async">` : p ? esc(initials(p)) : '?'}</span>`;
   const datebox = (s, on) => { const d = parse(s); return `<span class="datebox ${on ? 'on' : ''}"><span>${WD[d.getDay()]}</span><b>${d.getDate()}</b></span>`; };
   const back = (to) => `<button class="iconbtn" data-go="${to}" aria-label="Voltar">${ic('left')}</button>`;
 
@@ -616,7 +617,7 @@
     const chips = SKILLS.map(([k, label]) => `<button type="button" class="chip soft ${u.skills.includes(k) ? 'on' : ''}" data-act="toggleChip" data-skill="${k}" aria-pressed="${u.skills.includes(k)}">${label}</button>`).join('');
     return `
       <header class="top big"><div class="grow"><h1>Perfil</h1></div>${S.leader ? '<span class="tag">Líder</span>' : ''}</header>
-      <div class="card row" style="padding:16px">${avatar(u, 'lg')}<div class="grow"><div class="t" style="font-size:18px">${esc(u.name)}</div><div class="s">${esc(session.user.email || '')}</div><div class="s">${mine} escala${mine === 1 ? '' : 's'} pela frente</div></div></div>
+      <div class="card row" style="padding:16px"><button class="avatar-edit" data-act="photo" aria-label="${u.photo ? 'Trocar foto' : 'Colocar foto'}">${avatar(u, 'lg')}<span class="cam">${ic('camera', 'xs')}</span></button><input type="file" id="photo-in" accept="image/*" hidden><div class="grow"><div class="t" style="font-size:18px">${esc(u.name)}</div><div class="s">${esc(session.user.email || '')}</div><div class="s">${mine} escala${mine === 1 ? '' : 's'} pela frente</div></div></div>
       <form class="card" style="padding:14px;display:flex;flex-direction:column;gap:12px" data-form="perfil">
         <div class="field"><label for="pf-name">Nome</label><input id="pf-name" value="${esc(u.name)}" maxlength="80" required></div>
         <div class="field"><label>Funções que você exerce</label><div class="chips" style="flex-wrap:wrap" id="pf-skills">${chips}</div></div>
@@ -1034,6 +1035,51 @@
 
   /* Perfil e equipe */
   A.theme = (el) => { try { localStorage.setItem(THEME_KEY, el.dataset.t); } catch (e) { /* ok */ } applyTheme(); rerender(); setBar(cssBg()); };
+  A.photo = () => {
+    const u = me();
+    if (!u.photo) { pickPhoto(); return; }
+    sheet(`<h3>Foto de perfil</h3><div class="list">
+      <button class="row" data-act="photoPick">${ic('camera', 'sm')}<div class="grow t">Trocar foto</div></button>
+      <button class="row" data-act="photoRm" style="color:var(--danger)">${ic('trash', 'sm')}<div class="grow t">Remover foto</div></button></div>`);
+  };
+  A.photoPick = () => { closeSheet(); pickPhoto(); };
+  A.photoRm = () => { closeSheet(); act(() => sb.from('members').update({ avatar_url: null }).eq('id', S.meId), 'Foto removida.'); };
+  function pickPhoto() {
+    const inp = document.getElementById('photo-in');
+    inp.value = '';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      toast('Enviando foto…');
+      try {
+        const blob = await squareJpeg(f, 384);
+        const path = `${S.meId}/${Date.now()}.jpg`;
+        await must(sb.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' }));
+        const url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+        const old = me().photo;
+        const ok = await act(() => sb.from('members').update({ avatar_url: url }).eq('id', S.meId), 'Foto salva.');
+        // apaga a foto antiga para não acumular arquivos
+        const m = ok && old && old.split('/avatars/')[1];
+        if (m) sb.storage.from('avatars').remove([decodeURIComponent(m)]).catch(() => {});
+      } catch (e) { toast(errMsg(e)); }
+    };
+    inp.click();
+  }
+  // Recorta no centro, deixa quadrada e reduz o tamanho antes de enviar
+  function squareJpeg(file, size) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
+        c.width = c.height = size;
+        c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+        URL.revokeObjectURL(url);
+        c.toBlob((b) => (b ? res(b) : rej(new Error('Não consegui ler essa imagem.'))), 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Não consegui abrir essa imagem. Tente outra foto.')); };
+      img.src = url;
+    });
+  }
   A.toggleChip = (el) => { el.classList.toggle('on'); el.setAttribute('aria-pressed', el.classList.contains('on')); };
   A.logout = async () => { setPlayer(null); authTab = 'entrar'; inviteCode = null; try { localStorage.removeItem(CACHE); } catch (e) { /* ok */ } await sb.auth.signOut(); };
   A.changePw = () => {
