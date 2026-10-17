@@ -207,6 +207,48 @@
     }).join('');
   }
 
+  // Organiza uma cifra colada de qualquer site (Cifra Club, ChordPro, etc.) no formato do app
+  function cleanChart(text) {
+    let key = null;
+    const out = [];
+    const SECT = /^(intro|introdução|verso|estrofe|primeira parte|segunda parte|terceira parte|pré[- ]?refrão|refrão|coro|ponte|final|solo|interlúdio|tag|outro)(\s*\d+)?\s*:?$/i;
+    String(text).replace(/\r\n?/g, '\n').replace(/\t/g, '    ').replace(/\u00a0/g, ' ').split('\n').forEach((raw) => {
+      let line = raw.replace(/\s+$/, '');
+      const t = line.trim();
+      const tom = t.match(/^tom:\s*([A-G][#b]?)/i);
+      if (tom) { key = tom[1][0].toUpperCase() + tom[1].slice(1); return; }
+      if (/^\{[^}]*\}$/.test(t) || /^\[tab\b/i.test(t)) return; // diretivas ChordPro e títulos de tablatura
+      if (/^(capotraste|afinação|composição|cifra:|tablatura|exibir|cifra club|letras\.mus|\d+ exibições)/i.test(t)) return;
+      if (/^[eBGDAE]?\|?[-\d|hpb/\\~x ]{8,}\|?$/.test(t) && /-{4,}/.test(t)) return; // linhas de tablatura
+      // [Intro] G D Em C  ->  Intro: G D Em C
+      const introB = t.match(/^\[(intro|final|solo|interlúdio)\]\s*(.+)$/i);
+      if (introB && introB[2].split(/\s+/).every(isChord)) { out.push(introB[1][0].toUpperCase() + introB[1].slice(1).toLowerCase() + ': ' + introB[2].trim().replace(/\s+/g, ' ')); return; }
+      // Refrão:  ou  REFRÃO  ->  [Refrão]
+      const sec = t.match(SECT);
+      if (sec && !/^\[/.test(t)) { const n = t.replace(/:$/, '').trim().toLowerCase(); out.push('[' + n[0].toUpperCase() + n.slice(1) + ']'); return; }
+      // ChordPro: [G]Corre um [D]rio  ->  linha de acordes em cima da letra
+      if (/\[[A-G][^\]]*\]/.test(line) && !/^\[[^\]]+\]$/.test(t)) {
+        let chords = '', lyric = '';
+        line.split(/(\[[^\]]+\])/).forEach((part) => {
+          const m = part.match(/^\[([^\]]+)\]$/);
+          if (m && isChord(m[1])) { if (chords.length > lyric.length) lyric = lyric.padEnd(chords.length + 1); chords = chords.padEnd(lyric.length) + m[1] + ' '; }
+          else lyric += part;
+        });
+        out.push(chords.replace(/\s+$/, ''), lyric.replace(/\s+$/, ''));
+        return;
+      }
+      out.push(line);
+    });
+    const chart = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    let guess = false;
+    if (!key) { // sem "Tom:" no texto: o primeiro acorde costuma ser o tom
+      const first = chart.split('\n').map((l) => l.replace(/^(intro|final|solo|interlúdio):/i, '').trim().split(/\s+/)).find((tk) => tk[0] && tk.every(isChord));
+      const m = first && first[0].match(/^([A-G][#b]?)/);
+      if (m) { key = m[1]; guess = true; }
+    }
+    return { chart, guess, key: key && ALL_KEYS.includes(key) ? key : key && noteIdx(key) >= 0 ? ALL_KEYS[noteIdx(key)] : null };
+  }
+
   /* ---------------- Utilidades de UI ---------------- */
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const P = {
@@ -1076,13 +1118,45 @@
     const cats = Array.from(new Set(['Adoração', 'Celebração', 'Santa Ceia', ...S.songs.map((x) => x.cat)]));
     sheet(`<h3>${s ? 'Editar música' : 'Nova música'}</h3>
       <div class="field"><label for="ns-title">Título</label><input id="ns-title" value="${s ? esc(s.title) : ''}" placeholder="Nome da música" maxlength="120"></div>
+      ${s ? '' : '<div id="ns-dupe"></div>'}
       <div class="grid2"><div class="field"><label for="ns-cat">Categoria</label><select id="ns-cat">${cats.map((c) => `<option ${s && s.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="field"><label for="ns-key">Tom original</label><select id="ns-key">${ALL_KEYS.map((k) => `<option ${s && s.key === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div></div>
       <div class="grid2"><div class="field"><label for="ns-bpm">BPM</label><input id="ns-bpm" type="number" inputmode="numeric" min="20" max="300" value="${s ? s.bpm : 80}"></div>
         <div class="field"><label for="ns-sig">Compasso</label><select id="ns-sig">${['4/4', '3/4', '6/8', '2/4'].map((x) => `<option ${s && s.sig === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
       <div class="field"><label for="ns-media">Link para ouvir (YouTube, Spotify ou MP3)</label><input id="ns-media" type="url" inputmode="url" value="${s ? esc(s.media) : ''}" placeholder="https://youtu.be/…" autocomplete="off"></div>
+      <div class="chart-help"><span><b>Cifra automática:</b> procure a música, copie a cifra do site e cole aqui. O app organiza o texto e já reconhece o tom.</span>
+        <div class="btn-row"><button type="button" class="btn ghost" id="ns-find">${ic('search', 'sm')} Procurar cifra</button><button type="button" class="btn ghost" id="ns-paste">${ic('copy', 'sm')} Colar cifra</button></div></div>
       <div class="field"><label for="ns-chart">Cifra (acordes na linha de cima da letra; seções entre colchetes, ex.: [Refrão])</label><textarea id="ns-chart" rows="10" spellcheck="false" placeholder="[Verso 1]&#10;G        D&#10;Primeira linha da letra">${s ? esc(s.chart) : ''}</textarea></div>
       <button class="btn primary block" id="ns-ok">${s ? 'Salvar alterações' : 'Adicionar ao repertório'}</button>`, (sh) => {
+      const ta = sh.querySelector('#ns-chart'), keySel = sh.querySelector('#ns-key');
+      const dupe = sh.querySelector('#ns-dupe');
+      const norm = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      if (dupe) sh.querySelector('#ns-title').addEventListener('input', (ev) => {
+        // se a música já foi cadastrada por alguém, a cifra já está pronta no app
+        const q = norm(ev.target.value);
+        const hits = q.length < 3 ? [] : S.songs.filter((x) => norm(x.title).includes(q)).slice(0, 3);
+        dupe.innerHTML = hits.length ? `<div class="dupe"><div class="s">Já tem no app, com cifra pronta:</div>${hits.map((x) => `<button type="button" class="row" data-go="#/cifra/${x.id}"><span class="song-ic">${ic('music', 'sm')}</span><div class="grow"><div class="t">${esc(x.title)}</div><div class="s">${esc(x.cat)} • tom ${esc(x.key)}</div></div><span class="chev">${ic('right', 'sm')}</span></button>`).join('')}</div>` : '';
+      });
+      const tidy = (text) => {
+        const r = cleanChart(text);
+        ta.value = r.chart;
+        if (r.key) keySel.value = r.key;
+        toast(!r.key ? 'Cifra organizada. Confira o tom original.' : r.guess ? `Cifra organizada. Tom provável: ${r.key}. Confira.` : `Cifra organizada. Tom ${r.key} reconhecido.`);
+      };
+      ta.addEventListener('paste', (ev) => {
+        const txt = (ev.clipboardData || window.clipboardData).getData('text');
+        if (!txt || ta.value.trim()) return; // só organiza sozinho quando o campo está vazio
+        ev.preventDefault(); tidy(txt);
+      });
+      sh.querySelector('#ns-find').addEventListener('click', () => {
+        const t = sh.querySelector('#ns-title').value.trim();
+        if (!t) { toast('Escreva o nome da música primeiro.'); sh.querySelector('#ns-title').focus(); return; }
+        window.open('https://www.google.com/search?q=' + encodeURIComponent('cifra ' + t + ' site:cifraclub.com.br'), '_blank', 'noopener');
+      });
+      sh.querySelector('#ns-paste').addEventListener('click', async () => {
+        try { const txt = await navigator.clipboard.readText(); if (!txt.trim()) throw new Error(); tidy(txt); }
+        catch (e) { ta.focus(); toast('Toque e segure no campo da cifra e escolha Colar.'); }
+      });
       sh.querySelector('#ns-ok').addEventListener('click', async (ev) => {
         const title = sh.querySelector('#ns-title').value.trim();
         if (!title) { toast('Dê um título para a música.'); return; }
