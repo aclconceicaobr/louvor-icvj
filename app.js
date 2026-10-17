@@ -317,6 +317,13 @@
   let installHidden = (() => { try { return localStorage.getItem('louvor-install-hidden') === '1'; } catch (e) { return false; } })();
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (!document.querySelector('.sheet')) rerender(); });
   window.addEventListener('appinstalled', () => { installEvt = null; installHidden = true; rerender(); });
+  // Convite para ligar as notificações (no iPhone só aparece com o app instalado)
+  function pushCard() {
+    let hid = false; try { hid = localStorage.getItem('louvor-push-card') === '0'; } catch (e) { /* ok */ }
+    if (hid || pushOn() || pushState() !== 'default') return '';
+    return `<div class="install"><span class="song-ic">${ic('bell', 'sm')}</span><div class="grow"><b>Ative as notificações</b><p>Saiba na hora quando for escalado, quando houver troca e receba o lembrete na véspera do culto.</p>
+      <button class="btn primary" style="height:40px;margin-top:6px" data-act="pushToggle">Ativar notificações</button></div><button class="install-x" data-act="hidePushCard" aria-label="Fechar">${ic('x', 'sm')}</button></div>`;
+  }
   function installCard() {
     if (STANDALONE || installHidden) return '';
     const close = `<button class="install-x" data-act="hideInstall" aria-label="Fechar">${ic('x', 'sm')}</button>`;
@@ -368,6 +375,7 @@
         <button class="iconbtn round" data-go="#/avisos" aria-label="Avisos">${ic('bell')}</button>
         <button data-go="#/perfil" aria-label="Perfil">${avatar(u)}</button></header>
       ${installCard()}
+      ${pushCard()}
       ${hero}
       ${u.skills.length ? '' : `<button class="card row" data-go="#/perfil"><span class="ic-box" style="background:var(--brand-soft);color:var(--brand)">${ic('mic', 'sm')}</span><div class="grow"><div class="t">Marque suas funções</div><div class="s">Assim o líder consegue te escalar</div></div><span class="chev">${ic('right', 'sm')}</span></button>`}
       <section class="sec"><div class="sec-h"><h2>Esta semana</h2><a class="link" href="#/escalas">Ver escalas</a></div>
@@ -691,6 +699,7 @@
         <button class="row" data-go="#/disponibilidade"><div class="grow"><div class="t" style="font-weight:500">Minha disponibilidade</div></div><span class="chev">${ic('right', 'sm')}</span></button>
         ${sings(u) || repOf(u.id).length ? `<button class="row" data-go="#/repertorio/${u.id}"><div class="grow"><div class="t" style="font-weight:500">Meu repertório</div><div class="s">${repOf(u.id).length} música${repOf(u.id).length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
         ${S.leader ? `<button class="row" data-go="#/equipe"><div class="grow"><div class="t" style="font-weight:500">Equipe e convites</div><div class="s">${S.people.length} membro${S.people.length === 1 ? '' : 's'}</div></div><span class="chev">${ic('right', 'sm')}</span></button>` : ''}
+        <button class="row" data-act="pushToggle"><div class="grow"><div class="t" style="font-weight:500">Notificações</div><div class="s">${pushOn() ? 'Ativadas neste aparelho' : pushState() === 'denied' ? 'Bloqueadas nas configurações do celular' : 'Escala, trocas, avisos e lembrete do culto'}</div></div><label class="switch" style="pointer-events:none"><input type="checkbox" tabindex="-1" ${pushOn() ? 'checked' : ''}><span></span></label></button>
         <div class="row" style="flex-wrap:wrap;gap:10px"><div class="grow"><div class="t" style="font-weight:500">Aparência</div><div class="s">Modo verde deixa o app todo no verde da igreja</div></div>
           <div class="seg three" style="width:100%">${[['claro', 'Claro'], ['verde', 'Verde'], ['auto', 'Automático']].map(([k, l]) => `<button type="button" class="${getTheme() === k ? 'on' : ''}" data-act="theme" data-t="${k}" aria-pressed="${getTheme() === k}">${l}</button>`).join('')}</div></div>
         <button class="row" data-go="#/boas-vindas"><div class="grow"><div class="t" style="font-weight:500">Ver apresentação do app</div></div><span class="chev">${ic('right', 'sm')}</span></button>
@@ -857,6 +866,40 @@
 
   /* ---------------- Ações ---------------- */
   const A = {};
+  /* Notificações push */
+  const notify = (action, body) => { try { sb.functions.invoke('notificar', { body: Object.assign({ action }, body || {}) }).catch(() => {}); } catch (e) { /* sem push, sem problema */ } };
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const pushState = () => (!pushSupported() ? (IS_IOS && !STANDALONE ? 'ios-browser' : 'unsupported') : Notification.permission);
+  const b64u = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+  async function enablePush() {
+    const st = pushState();
+    if (st === 'ios-browser') { toast('No iPhone, as notificações funcionam com o app instalado na tela de início. Abra pelo ícone e ative aqui.'); return; }
+    if (st === 'unsupported') { toast('Este navegador não aceita notificações.'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notificações bloqueadas. Libere nas configurações do celular para este app.'); rerender(); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(CFG.vapid) });
+      const j = sub.toJSON();
+      await must(sb.from('push_subscriptions').upsert({ endpoint: j.endpoint, member_id: S.meId, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' }));
+      localStorage.setItem('louvor-push', '1');
+      notify('teste');
+      toast('Notificações ativadas. Enviamos uma de teste.');
+    } catch (e) { toast('Não consegui ativar as notificações: ' + errMsg(e)); }
+    rerender();
+  }
+  async function disablePush() {
+    try {
+      const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+      if (sub) { await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
+    } catch (e) { /* ok */ }
+    try { localStorage.removeItem('louvor-push'); } catch (e) { /* ok */ }
+    toast('Notificações desativadas neste aparelho.'); rerender();
+  }
+  const pushOn = () => { try { return pushState() === 'granted' && localStorage.getItem('louvor-push') === '1'; } catch (e) { return false; } };
+  A.hidePushCard = () => { try { localStorage.setItem('louvor-push-card', '0'); } catch (e) { /* ok */ } rerender(); };
+  A.pushToggle = () => (pushOn() ? disablePush() : enablePush());
+
   const setStatus = (evId, role, st) => must(sb.rpc('set_my_status', { p_event: evId, p_role: role, p_status: st }));
 
   A.setMine = (el) => {
@@ -882,7 +925,7 @@
         act(async () => {
           await setStatus(e.id, myRole(e), 'indisponivel');
           await must(sb.from('unavailability').insert({ member_id: S.meId, from_date: e.date, to_date: e.date, reason: reason + (note ? ' — ' + note : ''), event_id: e.id }));
-        }, 'Aviso enviado. O líder vai buscar substituto.');
+        }, 'Aviso enviado. O líder vai buscar substituto.').then((ok) => ok && notify('indisponivel', { event_id: e.id }));
       });
     });
   };
@@ -954,7 +997,7 @@
       } else {
         await must(sb.from('assignments').delete().eq('event_id', e.id).eq('role_key', rk));
       }
-    }, pid ? `${first(person(pid))} escalado(a) em ${roleDef(rk).label.toLowerCase()}.` : null);
+    }, pid ? `${first(person(pid))} escalado(a) em ${roleDef(rk).label.toLowerCase()}.` : null).then((ok) => { if (ok && pid && e.published) notify('escalado', { event_id: e.id, member_id: pid }); });
   };
   const saveSetlist = (e, list, msg) => act(() => sb.from('events').update({ setlist: list }).eq('id', e.id), msg);
   A.addSong = (el) => {
@@ -986,7 +1029,7 @@
   A.publish = (el) => {
     const e = event(el.dataset.ev);
     if (!filled(e)) { toast('Escale pelo menos uma pessoa antes de publicar.'); return; }
-    act(() => sb.from('events').update({ published: true }).eq('id', e.id), 'Escala publicada. Agora é só enviar no grupo.').then((ok) => ok && go('#/compartilhar/' + e.id));
+    act(() => sb.from('events').update({ published: true }).eq('id', e.id), 'Escala publicada. Agora é só enviar no grupo.').then((ok) => { if (ok) { notify('publicada', { event_id: e.id }); go('#/compartilhar/' + e.id); } });
   };
 
   A.cal = (el) => { calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(el.dataset.d), 1); rerender(); };
@@ -1390,7 +1433,7 @@
       const t = val('aviso-txt');
       if (!t) return;
       btn.disabled = true;
-      await act(() => sb.from('notices').insert({ text: t, author_name: me().name }), 'Aviso publicado no mural.');
+      if (await act(() => sb.from('notices').insert({ text: t, author_name: me().name }), 'Aviso publicado no mural.')) notify('aviso', { text: t });
       btn.disabled = false;
     }
     if (kind === 'perfil') {

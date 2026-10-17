@@ -15,3 +15,10 @@ e faz as ações do líder: senha temporária, remover membro.
 ## Repertório por ministro
 
 Tabela `repertoire` (member_id, song_id, key): cada ministro guarda as músicas que canta e o tom dele. Todos os membros leem; cada um edita o próprio repertório e líderes editam o de qualquer pessoa. Substitui o antigo `songs.pref` (que não é mais usado pelo app).
+
+## Notificações push
+
+- Tabela `push_subscriptions`: um registro por aparelho que ativou as notificações (cada membro só vê e apaga os próprios).
+- Chaves VAPID e o segredo do agendamento ficam em `private.push_config` (fora da API). A chave pública também está em `config.js`.
+- Função `functions/notificar`: envia as notificações (escalado, escala publicada, não posso servir, aviso novo, teste).
+- `pg_cron` roda `private.disparar_lembrete()` todo dia às 20h de Brasília: lembrete para quem serve no dia seguinte.
